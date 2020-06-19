@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2012 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,13 +16,14 @@
 
 package org.springframework.expression.spel;
 
-import static org.junit.Assert.assertEquals;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
 import org.springframework.expression.spel.standard.SpelExpression;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * These are tests for language features that are not yet considered 'live'. Either missing implementation or
@@ -78,7 +79,7 @@ public class InProgressTests extends AbstractExpressionTests {
 	@Test
 	public void testProjection06() throws Exception {
 		SpelExpression expr = (SpelExpression) parser.parseExpression("'abc'.![true]");
-		assertEquals("'abc'.![true]", expr.toStringAST());
+		assertThat(expr.toStringAST()).isEqualTo("'abc'.![true]");
 	}
 
 	// SELECTION
@@ -141,11 +142,11 @@ public class InProgressTests extends AbstractExpressionTests {
 	@Test
 	public void testSelectionAST() throws Exception {
 		SpelExpression expr = (SpelExpression) parser.parseExpression("'abc'.^[true]");
-		assertEquals("'abc'.^[true]", expr.toStringAST());
+		assertThat(expr.toStringAST()).isEqualTo("'abc'.^[true]");
 		expr = (SpelExpression) parser.parseExpression("'abc'.?[true]");
-		assertEquals("'abc'.?[true]", expr.toStringAST());
+		assertThat(expr.toStringAST()).isEqualTo("'abc'.?[true]");
 		expr = (SpelExpression) parser.parseExpression("'abc'.$[true]");
-		assertEquals("'abc'.$[true]", expr.toStringAST());
+		assertThat(expr.toStringAST()).isEqualTo("'abc'.$[true]");
 	}
 
 	// Constructor invocation

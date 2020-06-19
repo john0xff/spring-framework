@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Locale;
+
 import javax.servlet.ServletContext;
 
 import org.apache.tiles.request.ApplicationResource;
@@ -30,6 +31,8 @@ import org.apache.tiles.request.servlet.ServletApplicationContext;
 
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
+import org.springframework.lang.Nullable;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.ObjectUtils;
 import org.springframework.web.context.support.ServletContextResourcePatternResolver;
 
@@ -37,6 +40,7 @@ import org.springframework.web.context.support.ServletContextResourcePatternReso
  * Spring-specific subclass of the Tiles ServletApplicationContext.
  *
  * @author Rossen Stoyanchev
+ * @author Juergen Hoeller
  * @since 3.2
  */
 public class SpringWildcardServletTilesApplicationContext extends ServletApplicationContext {
@@ -51,23 +55,23 @@ public class SpringWildcardServletTilesApplicationContext extends ServletApplica
 
 
 	@Override
+	@Nullable
 	public ApplicationResource getResource(String localePath) {
-		ApplicationResource retValue = null;
 		Collection<ApplicationResource> urlSet = getResources(localePath);
-		if (urlSet != null && !urlSet.isEmpty()) {
-			retValue = urlSet.iterator().next();
+		if (!CollectionUtils.isEmpty(urlSet)) {
+			return urlSet.iterator().next();
 		}
-		return retValue;
+		return null;
 	}
 
 	@Override
+	@Nullable
 	public ApplicationResource getResource(ApplicationResource base, Locale locale) {
-		ApplicationResource retValue = null;
 		Collection<ApplicationResource> urlSet = getResources(base.getLocalePath(locale));
-		if (urlSet != null && !urlSet.isEmpty()) {
-			retValue = urlSet.iterator().next();
+		if (!CollectionUtils.isEmpty(urlSet)) {
+			return urlSet.iterator().next();
 		}
-		return retValue;
+		return null;
 	}
 
 	@Override
@@ -77,24 +81,26 @@ public class SpringWildcardServletTilesApplicationContext extends ServletApplica
 			resources = this.resolver.getResources(path);
 		}
 		catch (IOException ex) {
-			return Collections.<ApplicationResource> emptyList();
+			((ServletContext) getContext()).log("Resource retrieval failed for path: " + path, ex);
+			return Collections.emptyList();
 		}
-		Collection<ApplicationResource> resourceList = new ArrayList<ApplicationResource>();
-		if (!ObjectUtils.isEmpty(resources)) {
-			for (Resource resource : resources) {
-				URL url;
-				try {
-					url = resource.getURL();
-					resourceList.add(new URLApplicationResource(url.toExternalForm(), url));
-				}
-				catch (IOException ex) {
-					// shouldn't happen with the kind of resources we're using
-					throw new IllegalArgumentException("No URL for " + resource.toString(), ex);
-				}
+		if (ObjectUtils.isEmpty(resources)) {
+			((ServletContext) getContext()).log("No resources found for path pattern: " + path);
+			return Collections.emptyList();
+		}
+
+		Collection<ApplicationResource> resourceList = new ArrayList<>(resources.length);
+		for (Resource resource : resources) {
+			try {
+				URL url = resource.getURL();
+				resourceList.add(new URLApplicationResource(url.toExternalForm(), url));
+			}
+			catch (IOException ex) {
+				// Shouldn't happen with the kind of resources we're using
+				throw new IllegalArgumentException("No URL for " + resource, ex);
 			}
 		}
 		return resourceList;
 	}
 
 }
-

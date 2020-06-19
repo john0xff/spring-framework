@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +19,9 @@ package org.springframework.web.socket.server.standard;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+
 import javax.servlet.ServletContext;
 import javax.websocket.DeploymentException;
 import javax.websocket.server.ServerContainer;
@@ -27,8 +29,9 @@ import javax.websocket.server.ServerEndpoint;
 import javax.websocket.server.ServerEndpointConfig;
 
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.context.ApplicationContext;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.web.context.support.WebApplicationObjectSupport;
 
@@ -41,7 +44,7 @@ import org.springframework.web.context.support.WebApplicationObjectSupport;
  *
  * <p>When this class is used, by declaring it in Spring configuration, it should be
  * possible to turn off a Servlet container's scan for WebSocket endpoints. This can be
- * done with the help of the {@code <absolute-ordering>} element in web.xml.
+ * done with the help of the {@code <absolute-ordering>} element in {@code web.xml}.
  *
  * @author Rossen Stoyanchev
  * @author Juergen Hoeller
@@ -50,56 +53,40 @@ import org.springframework.web.context.support.WebApplicationObjectSupport;
  * @see SpringConfigurator
  * @see ServletServerContainerFactoryBean
  */
-public class ServerEndpointExporter extends WebApplicationObjectSupport implements BeanPostProcessor, InitializingBean {
+public class ServerEndpointExporter extends WebApplicationObjectSupport
+		implements InitializingBean, SmartInitializingSingleton {
 
-	private ServerContainer serverContainer;
-
+	@Nullable
 	private List<Class<?>> annotatedEndpointClasses;
 
-	private Set<Class<?>> annotatedEndpointBeanTypes;
+	@Nullable
+	private ServerContainer serverContainer;
 
-
-	/**
-	 * Set the JSR-356 {@link ServerContainer} to use for endpoint registration.
-	 * If not set, the container is going to be retrieved via the {@code ServletContext}.
-	 * @since 4.1
-	 */
-	public void setServerContainer(ServerContainer serverContainer) {
-		this.serverContainer = serverContainer;
-	}
-
-	/**
-	 * Return the JSR-356 {@link ServerContainer} to use for endpoint registration.
-	 */
-	protected ServerContainer getServerContainer() {
-		return this.serverContainer;
-	}
 
 	/**
 	 * Explicitly list annotated endpoint types that should be registered on startup. This
 	 * can be done if you wish to turn off a Servlet container's scan for endpoints, which
 	 * goes through all 3rd party jars in the, and rely on Spring configuration instead.
 	 * @param annotatedEndpointClasses {@link ServerEndpoint}-annotated types
- 	 */
+	 */
 	public void setAnnotatedEndpointClasses(Class<?>... annotatedEndpointClasses) {
 		this.annotatedEndpointClasses = Arrays.asList(annotatedEndpointClasses);
 	}
 
-	@Override
-	protected void initApplicationContext(ApplicationContext context) {
-		// Initializes ServletContext given a WebApplicationContext
-		super.initApplicationContext(context);
+	/**
+	 * Set the JSR-356 {@link ServerContainer} to use for endpoint registration.
+	 * If not set, the container is going to be retrieved via the {@code ServletContext}.
+	 */
+	public void setServerContainer(@Nullable ServerContainer serverContainer) {
+		this.serverContainer = serverContainer;
+	}
 
-		// Retrieve beans which are annotated with @ServerEndpoint
-		this.annotatedEndpointBeanTypes = new LinkedHashSet<Class<?>>();
-		String[] beanNames = context.getBeanNamesForAnnotation(ServerEndpoint.class);
-		for (String beanName : beanNames) {
-			Class<?> beanType = context.getType(beanName);
-			if (logger.isInfoEnabled()) {
-				logger.info("Detected @ServerEndpoint bean '" + beanName + "', registering it as an endpoint by type");
-			}
-			this.annotatedEndpointBeanTypes.add(beanType);
-		}
+	/**
+	 * Return the JSR-356 {@link ServerContainer} to use for endpoint registration.
+	 */
+	@Nullable
+	protected ServerContainer getServerContainer() {
+		return this.serverContainer;
 	}
 
 	@Override
@@ -110,64 +97,81 @@ public class ServerEndpointExporter extends WebApplicationObjectSupport implemen
 		}
 	}
 
+	@Override
+	protected boolean isContextRequired() {
+		return false;
+	}
 
 	@Override
 	public void afterPropertiesSet() {
 		Assert.state(getServerContainer() != null, "javax.websocket.server.ServerContainer not available");
+	}
+
+	@Override
+	public void afterSingletonsInstantiated() {
 		registerEndpoints();
 	}
 
+
 	/**
-	 * Actually register the endpoints. Called by {@link #afterPropertiesSet()}.
-	 * @since 4.1
+	 * Actually register the endpoints. Called by {@link #afterSingletonsInstantiated()}.
 	 */
 	protected void registerEndpoints() {
-		Set<Class<?>> endpointClasses = new LinkedHashSet<Class<?>>();
+		Set<Class<?>> endpointClasses = new LinkedHashSet<>();
 		if (this.annotatedEndpointClasses != null) {
 			endpointClasses.addAll(this.annotatedEndpointClasses);
 		}
-		if (this.annotatedEndpointBeanTypes != null) {
-			endpointClasses.addAll(this.annotatedEndpointBeanTypes);
+
+		ApplicationContext context = getApplicationContext();
+		if (context != null) {
+			String[] endpointBeanNames = context.getBeanNamesForAnnotation(ServerEndpoint.class);
+			for (String beanName : endpointBeanNames) {
+				endpointClasses.add(context.getType(beanName));
+			}
 		}
+
 		for (Class<?> endpointClass : endpointClasses) {
 			registerEndpoint(endpointClass);
+		}
+
+		if (context != null) {
+			Map<String, ServerEndpointConfig> endpointConfigMap = context.getBeansOfType(ServerEndpointConfig.class);
+			for (ServerEndpointConfig endpointConfig : endpointConfigMap.values()) {
+				registerEndpoint(endpointConfig);
+			}
 		}
 	}
 
 	private void registerEndpoint(Class<?> endpointClass) {
+		ServerContainer serverContainer = getServerContainer();
+		Assert.state(serverContainer != null,
+				"No ServerContainer set. Most likely the server's own WebSocket ServletContainerInitializer " +
+				"has not run yet. Was the Spring ApplicationContext refreshed through a " +
+				"org.springframework.web.context.ContextLoaderListener, " +
+				"i.e. after the ServletContext has been fully initialized?");
 		try {
-			if (logger.isInfoEnabled()) {
-				logger.info("Registering @ServerEndpoint type: " + endpointClass);
+			if (logger.isDebugEnabled()) {
+				logger.debug("Registering @ServerEndpoint class: " + endpointClass);
 			}
-			getServerContainer().addEndpoint(endpointClass);
+			serverContainer.addEndpoint(endpointClass);
 		}
 		catch (DeploymentException ex) {
-			throw new IllegalStateException("Failed to register @ServerEndpoint type " + endpointClass, ex);
+			throw new IllegalStateException("Failed to register @ServerEndpoint class: " + endpointClass, ex);
 		}
 	}
 
-
-	@Override
-	public Object postProcessBeforeInitialization(Object bean, String beanName) {
-		return bean;
-	}
-
-	@Override
-	public Object postProcessAfterInitialization(Object bean, String beanName) {
-		if (bean instanceof ServerEndpointConfig) {
-			ServerEndpointConfig endpointConfig = (ServerEndpointConfig) bean;
-			try {
-				if (logger.isInfoEnabled()) {
-					logger.info("Registering bean '" + beanName +
-							"' as javax.websocket.Endpoint under path " + endpointConfig.getPath());
-				}
-				getServerContainer().addEndpoint(endpointConfig);
+	private void registerEndpoint(ServerEndpointConfig endpointConfig) {
+		ServerContainer serverContainer = getServerContainer();
+		Assert.state(serverContainer != null, "No ServerContainer set");
+		try {
+			if (logger.isDebugEnabled()) {
+				logger.debug("Registering ServerEndpointConfig: " + endpointConfig);
 			}
-			catch (DeploymentException ex) {
-				throw new IllegalStateException("Failed to deploy Endpoint bean with name '" + bean + "'", ex);
-			}
+			serverContainer.addEndpoint(endpointConfig);
 		}
-		return bean;
+		catch (DeploymentException ex) {
+			throw new IllegalStateException("Failed to register ServerEndpointConfig: " + endpointConfig, ex);
+		}
 	}
 
 }

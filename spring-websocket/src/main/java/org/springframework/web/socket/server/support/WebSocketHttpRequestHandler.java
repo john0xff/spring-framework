@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,58 +21,74 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import org.springframework.context.Lifecycle;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.http.server.ServletServerHttpResponse;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.web.HttpRequestHandler;
+import org.springframework.web.context.ServletContextAware;
 import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.handler.ExceptionWebSocketHandlerDecorator;
+import org.springframework.web.socket.handler.LoggingWebSocketHandlerDecorator;
 import org.springframework.web.socket.server.HandshakeFailureException;
 import org.springframework.web.socket.server.HandshakeHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
-import org.springframework.web.socket.handler.ExceptionWebSocketHandlerDecorator;
-import org.springframework.web.socket.handler.LoggingWebSocketHandlerDecorator;
 
 /**
  * A {@link HttpRequestHandler} for processing WebSocket handshake requests.
  *
  * <p>This is the main class to use when configuring a server WebSocket at a specific URL.
- * It is a very thin wrapper around a {@link HandshakeHandler} and a
- * {@link WebSocketHandler} instance also adapting the {@link HttpServletRequest} and
- * {@link HttpServletResponse} to {@link ServerHttpRequest} and {@link ServerHttpResponse}
- * respectively.
+ * It is a very thin wrapper around a {@link WebSocketHandler} and a {@link HandshakeHandler},
+ * also adapting the {@link HttpServletRequest} and {@link HttpServletResponse} to
+ * {@link ServerHttpRequest} and {@link ServerHttpResponse}, respectively.
  *
  * @author Rossen Stoyanchev
  * @since 4.0
  */
-public class WebSocketHttpRequestHandler implements HttpRequestHandler {
+public class WebSocketHttpRequestHandler implements HttpRequestHandler, Lifecycle, ServletContextAware {
 
 	private static final Log logger = LogFactory.getLog(WebSocketHttpRequestHandler.class);
 
+	private final WebSocketHandler wsHandler;
 
 	private final HandshakeHandler handshakeHandler;
 
-	private final WebSocketHandler wsHandler;
+	private final List<HandshakeInterceptor> interceptors = new ArrayList<>();
 
-	private final List<HandshakeInterceptor> interceptors = new ArrayList<HandshakeInterceptor>();
+	private volatile boolean running;
 
 
-	public WebSocketHttpRequestHandler(WebSocketHandler webSocketHandler) {
-		this(webSocketHandler, new DefaultHandshakeHandler());
+	public WebSocketHttpRequestHandler(WebSocketHandler wsHandler) {
+		this(wsHandler, new DefaultHandshakeHandler());
 	}
 
 	public WebSocketHttpRequestHandler(WebSocketHandler wsHandler, HandshakeHandler handshakeHandler) {
 		Assert.notNull(wsHandler, "wsHandler must not be null");
 		Assert.notNull(handshakeHandler, "handshakeHandler must not be null");
-		this.wsHandler = new ExceptionWebSocketHandlerDecorator(new LoggingWebSocketHandlerDecorator(wsHandler));
+		this.wsHandler = decorate(wsHandler);
 		this.handshakeHandler = handshakeHandler;
+	}
+
+	/**
+	 * Decorate the {@code WebSocketHandler} passed into the constructor.
+	 * <p>By default, {@link LoggingWebSocketHandlerDecorator} and
+	 * {@link ExceptionWebSocketHandlerDecorator} are added.
+	 * @since 5.2.2
+	 */
+	protected WebSocketHandler decorate(WebSocketHandler handler) {
+		return new ExceptionWebSocketHandlerDecorator(new LoggingWebSocketHandlerDecorator(handler));
 	}
 
 
@@ -93,7 +109,7 @@ public class WebSocketHttpRequestHandler implements HttpRequestHandler {
 	/**
 	 * Configure one or more WebSocket handshake request interceptors.
 	 */
-	public void setHandshakeInterceptors(List<HandshakeInterceptor> interceptors) {
+	public void setHandshakeInterceptors(@Nullable List<HandshakeInterceptor> interceptors) {
 		this.interceptors.clear();
 		if (interceptors != null) {
 			this.interceptors.addAll(interceptors);
@@ -106,6 +122,40 @@ public class WebSocketHttpRequestHandler implements HttpRequestHandler {
 	public List<HandshakeInterceptor> getHandshakeInterceptors() {
 		return this.interceptors;
 	}
+
+	@Override
+	public void setServletContext(ServletContext servletContext) {
+		if (this.handshakeHandler instanceof ServletContextAware) {
+			((ServletContextAware) this.handshakeHandler).setServletContext(servletContext);
+		}
+	}
+
+
+	@Override
+	public void start() {
+		if (!isRunning()) {
+			this.running = true;
+			if (this.handshakeHandler instanceof Lifecycle) {
+				((Lifecycle) this.handshakeHandler).start();
+			}
+		}
+	}
+
+	@Override
+	public void stop() {
+		if (isRunning()) {
+			this.running = false;
+			if (this.handshakeHandler instanceof Lifecycle) {
+				((Lifecycle) this.handshakeHandler).stop();
+			}
+		}
+	}
+
+	@Override
+	public boolean isRunning() {
+		return this.running;
+	}
+
 
 	@Override
 	public void handleRequest(HttpServletRequest servletRequest, HttpServletResponse servletResponse)
@@ -121,25 +171,26 @@ public class WebSocketHttpRequestHandler implements HttpRequestHandler {
 			if (logger.isDebugEnabled()) {
 				logger.debug(servletRequest.getMethod() + " " + servletRequest.getRequestURI());
 			}
-			Map<String, Object> attributes = new HashMap<String, Object>();
+			Map<String, Object> attributes = new HashMap<>();
 			if (!chain.applyBeforeHandshake(request, response, attributes)) {
 				return;
 			}
 			this.handshakeHandler.doHandshake(request, response, this.wsHandler, attributes);
 			chain.applyAfterHandshake(request, response, null);
-			response.close();
 		}
 		catch (HandshakeFailureException ex) {
 			failure = ex;
 		}
-		catch (Throwable t) {
-			failure = new HandshakeFailureException("Uncaught failure for request " + request.getURI(), t);
+		catch (Exception ex) {
+			failure = new HandshakeFailureException("Uncaught failure for request " + request.getURI(), ex);
 		}
 		finally {
 			if (failure != null) {
 				chain.applyAfterHandshake(request, response, failure);
+				response.close();
 				throw failure;
 			}
+			response.close();
 		}
 	}
 

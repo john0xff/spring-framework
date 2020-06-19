@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,17 +20,19 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.mock.web.test.MockFilterChain;
-import org.springframework.mock.web.test.MockHttpServletRequest;
-import org.springframework.mock.web.test.MockHttpServletResponse;
-import org.springframework.mock.web.test.MockServletContext;
-import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
-import org.springframework.web.servlet.config.annotation.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.*;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurationSupport;
+import org.springframework.web.testfixture.servlet.MockFilterChain;
+import org.springframework.web.testfixture.servlet.MockHttpServletRequest;
+import org.springframework.web.testfixture.servlet.MockHttpServletResponse;
+import org.springframework.web.testfixture.servlet.MockServletContext;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 
 /**
@@ -47,67 +49,65 @@ public class ResourceUrlProviderJavaConfigTests {
 
 	private MockHttpServletRequest request;
 
+	private MockHttpServletResponse response;
 
-	@Before
+
+	@BeforeEach
 	@SuppressWarnings("resource")
 	public void setup() throws Exception {
-
-		this.filterChain = new MockFilterChain(this.servlet, new ResourceUrlEncodingFilter());
-
-		AnnotationConfigWebApplicationContext ctx = new AnnotationConfigWebApplicationContext();
-		ctx.setServletContext(new MockServletContext());
-		ctx.register(WebConfig.class);
-		ctx.refresh();
-
-		ResourceUrlProvider urlProvider = ctx.getBean(ResourceUrlProvider.class);
+		AnnotationConfigWebApplicationContext context = new AnnotationConfigWebApplicationContext();
+		context.setServletContext(new MockServletContext());
+		context.register(WebConfig.class);
+		context.refresh();
 
 		this.request = new MockHttpServletRequest("GET", "/");
-		request.setAttribute(ResourceUrlProviderExposingInterceptor.RESOURCE_URL_PROVIDER_ATTR, urlProvider);
-	}
-
-
-	@Test
-	public void rootServletMapping() throws Exception {
-
-		this.request.setRequestURI("/");
-		this.request.setMethod("GET");
-		this.request.setRequestURI("/myapp/index.html");
 		this.request.setContextPath("/myapp");
-		this.request.setServletPath("/index.html");
-		this.filterChain.doFilter(request, new MockHttpServletResponse());
+		this.response = new MockHttpServletResponse();
 
-		String actual = this.servlet.response.encodeURL("/myapp/resources/foo.css");
-		assertEquals("/myapp/resources/foo-e36d2e05253c6c7085a91522ce43a0b4.css", actual);
+		this.filterChain = new MockFilterChain(this.servlet,
+				new ResourceUrlEncodingFilter(),
+				(request, response, chain) -> {
+					Object urlProvider = context.getBean(ResourceUrlProvider.class);
+					request.setAttribute(ResourceUrlProviderExposingInterceptor.RESOURCE_URL_PROVIDER_ATTR, urlProvider);
+					chain.doFilter(request, response);
+				});
 	}
 
 	@Test
-	public void prefixServletMapping() throws Exception {
+	public void resolvePathWithServletMappedAsRoot() throws Exception {
+		this.request.setRequestURI("/myapp/index");
+		this.request.setServletPath("/index");
+		this.filterChain.doFilter(this.request, this.response);
 
-		this.request.setRequestURI("/myapp/myservlet/index.html");
-		this.request.setContextPath("/myapp");
+		assertThat(resolvePublicResourceUrlPath("/myapp/resources/foo.css")).isEqualTo("/myapp/resources/foo-e36d2e05253c6c7085a91522ce43a0b4.css");
+	}
+
+	@Test
+	public void resolvePathWithServletMappedByPrefix() throws Exception {
+		this.request.setRequestURI("/myapp/myservlet/index");
 		this.request.setServletPath("/myservlet");
-		this.filterChain.doFilter(request, new MockHttpServletResponse());
+		this.filterChain.doFilter(this.request, this.response);
 
-		String actual = this.servlet.response.encodeURL("/myapp/myservlet/resources/foo.css");
-		assertEquals("/myapp/myservlet/resources/foo-e36d2e05253c6c7085a91522ce43a0b4.css", actual);
+		assertThat(resolvePublicResourceUrlPath("/myapp/myservlet/resources/foo.css")).isEqualTo("/myapp/myservlet/resources/foo-e36d2e05253c6c7085a91522ce43a0b4.css");
 	}
 
 	@Test
-	public void extensionServletMapping() throws Exception {
+	public void resolvePathNoMatch() throws Exception {
+		this.request.setRequestURI("/myapp/myservlet/index");
+		this.request.setServletPath("/myservlet");
+		this.filterChain.doFilter(this.request, this.response);
 
-		this.request.setRequestURI("/myapp/index.html");
-		this.request.setContextPath("/myapp");
-		this.request.setServletPath("/index.html");
-		this.filterChain.doFilter(request, new MockHttpServletResponse());
+		assertThat(resolvePublicResourceUrlPath("/myapp/myservlet/index")).isEqualTo("/myapp/myservlet/index");
+	}
 
-		String actual = this.servlet.response.encodeURL("/myapp/resources/foo.css");
-		assertEquals("/myapp/resources/foo-e36d2e05253c6c7085a91522ce43a0b4.css", actual);
+
+	private String resolvePublicResourceUrlPath(String path) {
+		return this.servlet.wrappedResponse.encodeURL(path);
 	}
 
 
 	@Configuration
 	static class WebConfig extends WebMvcConfigurationSupport {
-
 
 		@Override
 		public void addResourceHandlers(ResourceHandlerRegistry registry) {
@@ -120,11 +120,11 @@ public class ResourceUrlProviderJavaConfigTests {
 	@SuppressWarnings("serial")
 	private static class TestServlet extends HttpServlet {
 
-		private HttpServletResponse response;
+		private HttpServletResponse wrappedResponse;
 
 		@Override
 		protected void doGet(HttpServletRequest request, HttpServletResponse response) {
-			this.response = response;
+			this.wrappedResponse = response;
 		}
 	}
 

@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,20 +16,15 @@
 
 package org.springframework.web.socket.messaging;
 
-import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.api.TestInfo;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -45,187 +40,167 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.support.AbstractSubscribableChannel;
 import org.springframework.messaging.support.ExecutorSubscribableChannel;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.socket.*;
-import org.springframework.web.socket.config.annotation.AbstractWebSocketMessageBrokerConfigurer;
-import org.springframework.web.socket.handler.TextWebSocketHandler;
-import org.springframework.web.socket.client.standard.StandardWebSocketClient;
-import org.springframework.web.socket.client.jetty.JettyWebSocketClient;
+import org.springframework.web.socket.AbstractWebSocketIntegrationTests;
+import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.WebSocketTestServer;
+import org.springframework.web.socket.client.WebSocketClient;
 import org.springframework.web.socket.config.annotation.DelegatingWebSocketMessageBrokerConfiguration;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
+import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.socket.server.HandshakeHandler;
 
-import static org.junit.Assert.*;
-import static org.springframework.web.socket.messaging.StompTextMessageBuilder.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.web.socket.messaging.StompTextMessageBuilder.create;
 
 /**
  * Integration tests with annotated message-handling methods.
  *
  * @author Rossen Stoyanchev
+ * @author Sam Brannen
  */
-@RunWith(Parameterized.class)
-public class StompWebSocketIntegrationTests extends AbstractWebSocketIntegrationTests {
+class StompWebSocketIntegrationTests extends AbstractWebSocketIntegrationTests {
 
-	@Parameters
-	public static Iterable<Object[]> arguments() {
-		return Arrays.asList(new Object[][] {
-				{new JettyWebSocketTestServer(), new JettyWebSocketClient()},
-				{new TomcatWebSocketTestServer(), new StandardWebSocketClient()},
-				{new UndertowTestServer(), new StandardWebSocketClient()}
-		});
-	}
+	private static final long TIMEOUT = 10;
 
 
 	@Override
 	protected Class<?>[] getAnnotatedConfigClasses() {
-		return new Class<?>[] { TestMessageBrokerConfiguration.class, TestMessageBrokerConfigurer.class };
+		return new Class<?>[] {TestMessageBrokerConfiguration.class, TestMessageBrokerConfigurer.class};
 	}
 
 
-	@Test
-	public void sendMessageToController() throws Exception {
+	@ParameterizedWebSocketTest
+	@SuppressWarnings("try")
+	void sendMessageToController(WebSocketTestServer server, WebSocketClient webSocketClient, TestInfo testInfo) throws Exception {
+		super.setup(server, webSocketClient, testInfo);
 
 		TextMessage message = create(StompCommand.SEND).headers("destination:/app/simple").build();
-		WebSocketSession session = doHandshake(new TestClientWebSocketHandler(0, message), "/ws").get();
 
-		SimpleController controller = this.wac.getBean(SimpleController.class);
-		try {
-			assertTrue(controller.latch.await(10, TimeUnit.SECONDS));
-		}
-		finally {
-			session.close();
+		try (@SuppressWarnings("unused")WebSocketSession session = doHandshake(new TestClientWebSocketHandler(0, message), "/ws").get()) {
+			SimpleController controller = this.wac.getBean(SimpleController.class);
+			assertThat(controller.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
 		}
 	}
 
-	@Test
-	public void sendMessageToControllerAndReceiveReplyViaTopic() throws Exception {
+	@ParameterizedWebSocketTest
+	@SuppressWarnings("try")
+	void sendMessageToControllerAndReceiveReplyViaTopic(WebSocketTestServer server, WebSocketClient webSocketClient, TestInfo testInfo) throws Exception {
+		super.setup(server, webSocketClient, testInfo);
 
-		TextMessage message1 = create(StompCommand.SUBSCRIBE)
+		TextMessage m0 = create(StompCommand.CONNECT).headers("accept-version:1.1").build();
+		TextMessage m1 = create(StompCommand.SUBSCRIBE)
 				.headers("id:subs1", "destination:/topic/increment").build();
-
-		TextMessage message2 = create(StompCommand.SEND)
+		TextMessage m2 = create(StompCommand.SEND)
 				.headers("destination:/app/increment").body("5").build();
 
-		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(1, message1, message2);
-		WebSocketSession session = doHandshake(clientHandler, "/ws").get();
+		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(2, m0, m1, m2);
 
-		try {
-			assertTrue(clientHandler.latch.await(2, TimeUnit.SECONDS));
-		}
-		finally {
-			session.close();
+		try (WebSocketSession session = doHandshake(clientHandler, "/ws").get()) {
+			assertThat(clientHandler.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
 		}
 	}
 
-	// SPR-10930
+	@ParameterizedWebSocketTest  // SPR-10930
+	@SuppressWarnings("try")
+	void sendMessageToBrokerAndReceiveReplyViaTopic(WebSocketTestServer server, WebSocketClient webSocketClient, TestInfo testInfo) throws Exception {
+		super.setup(server, webSocketClient, testInfo);
 
-	@Test
-	public void sendMessageToBrokerAndReceiveReplyViaTopic() throws Exception {
-
+		TextMessage m0 = create(StompCommand.CONNECT).headers("accept-version:1.1").build();
 		TextMessage m1 = create(StompCommand.SUBSCRIBE).headers("id:subs1", "destination:/topic/foo").build();
 		TextMessage m2 = create(StompCommand.SEND).headers("destination:/topic/foo").body("5").build();
 
-		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(1, m1, m2);
-		WebSocketSession session = doHandshake(clientHandler, "/ws").get();
+		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(2, m0, m1, m2);
 
-		try {
-			assertTrue(clientHandler.latch.await(2, TimeUnit.SECONDS));
+		try (WebSocketSession session = doHandshake(clientHandler, "/ws").get()) {
+			assertThat(clientHandler.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
 
-			String payload = clientHandler.actual.get(0).getPayload();
-			assertTrue("Expected STOMP MESSAGE, got " + payload, payload.startsWith("MESSAGE\n"));
-		}
-		finally {
-			session.close();
+			String payload = clientHandler.actual.get(1).getPayload();
+			assertThat(payload.startsWith("MESSAGE\n")).as("Expected STOMP MESSAGE, got " + payload).isTrue();
 		}
 	}
 
-	// SPR-11648
+	@ParameterizedWebSocketTest  // SPR-11648
+	@SuppressWarnings("try")
+	void sendSubscribeToControllerAndReceiveReply(WebSocketTestServer server, WebSocketClient webSocketClient, TestInfo testInfo) throws Exception {
+		super.setup(server, webSocketClient, testInfo);
 
-	@Test
-	public void sendSubscribeToControllerAndReceiveReply() throws Exception {
-
+		TextMessage m0 = create(StompCommand.CONNECT).headers("accept-version:1.1").build();
 		String destHeader = "destination:/app/number";
-		TextMessage message = create(StompCommand.SUBSCRIBE).headers("id:subs1", destHeader).build();
+		TextMessage m1 = create(StompCommand.SUBSCRIBE).headers("id:subs1", destHeader).build();
 
-		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(1, message);
-		WebSocketSession session = doHandshake(clientHandler, "/ws").get();
+		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(2, m0, m1);
 
-		try {
-			assertTrue(clientHandler.latch.await(2, TimeUnit.SECONDS));
-			String payload = clientHandler.actual.get(0).getPayload();
-			assertTrue("Expected STOMP destination=/app/number, got " + payload, payload.contains(destHeader));
-			assertTrue("Expected STOMP Payload=42, got " + payload, payload.contains("42"));
-		}
-		finally {
-			session.close();
+		try (WebSocketSession session = doHandshake(clientHandler, "/ws").get()) {
+			assertThat(clientHandler.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
+			String payload = clientHandler.actual.get(1).getPayload();
+			assertThat(payload.contains(destHeader)).as("Expected STOMP destination=/app/number, got " + payload).isTrue();
+			assertThat(payload.contains("42")).as("Expected STOMP Payload=42, got " + payload).isTrue();
 		}
 	}
 
-	@Test
-	public void handleExceptionAndSendToUser() throws Exception {
+	@ParameterizedWebSocketTest
+	@SuppressWarnings("try")
+	void handleExceptionAndSendToUser(WebSocketTestServer server, WebSocketClient webSocketClient, TestInfo testInfo) throws Exception {
+		super.setup(server, webSocketClient, testInfo);
 
 		String destHeader = "destination:/user/queue/error";
+		TextMessage m0 = create(StompCommand.CONNECT).headers("accept-version:1.1").build();
 		TextMessage m1 = create(StompCommand.SUBSCRIBE).headers("id:subs1", destHeader).build();
 		TextMessage m2 = create(StompCommand.SEND).headers("destination:/app/exception").build();
 
-		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(1, m1, m2);
-		WebSocketSession session = doHandshake(clientHandler, "/ws").get();
+		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(2, m0, m1, m2);
 
-		try {
-			assertTrue(clientHandler.latch.await(2, TimeUnit.SECONDS));
-
-			String payload = clientHandler.actual.get(0).getPayload();
-			assertTrue(payload.startsWith("MESSAGE\n"));
-			assertTrue(payload.contains("destination:/user/queue/error\n"));
-			assertTrue(payload.endsWith("Got error: Bad input\0"));
-		}
-		finally {
-			session.close();
+		try (WebSocketSession session = doHandshake(clientHandler, "/ws").get()) {
+			assertThat(clientHandler.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
+			String payload = clientHandler.actual.get(1).getPayload();
+			assertThat(payload.startsWith("MESSAGE\n")).isTrue();
+			assertThat(payload.contains("destination:/user/queue/error\n")).isTrue();
+			assertThat(payload.endsWith("Got error: Bad input\0")).isTrue();
 		}
 	}
 
-	@Test
-	public void webSocketScope() throws Exception {
+	@ParameterizedWebSocketTest
+	@SuppressWarnings("try")
+	void webSocketScope(WebSocketTestServer server, WebSocketClient webSocketClient, TestInfo testInfo) throws Exception {
+		super.setup(server, webSocketClient, testInfo);
 
-		TextMessage message1 = create(StompCommand.SUBSCRIBE)
+		TextMessage m0 = create(StompCommand.CONNECT).headers("accept-version:1.1").build();
+		TextMessage m1 = create(StompCommand.SUBSCRIBE)
 				.headers("id:subs1", "destination:/topic/scopedBeanValue").build();
-
-		TextMessage message2 = create(StompCommand.SEND)
+		TextMessage m2 = create(StompCommand.SEND)
 				.headers("destination:/app/scopedBeanValue").build();
 
-		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(1, message1, message2);
-		WebSocketSession session = doHandshake(clientHandler, "/ws").get();
+		TestClientWebSocketHandler clientHandler = new TestClientWebSocketHandler(2, m0, m1, m2);
 
-		try {
-			assertTrue(clientHandler.latch.await(2, TimeUnit.SECONDS));
-
-			String payload = clientHandler.actual.get(0).getPayload();
-			assertTrue(payload.startsWith("MESSAGE\n"));
-			assertTrue(payload.contains("destination:/topic/scopedBeanValue\n"));
-			assertTrue(payload.endsWith("55\0"));
-		}
-		finally {
-			session.close();
+		try (WebSocketSession session = doHandshake(clientHandler, "/ws").get()) {
+			assertThat(clientHandler.latch.await(TIMEOUT, TimeUnit.SECONDS)).isTrue();
+			String payload = clientHandler.actual.get(1).getPayload();
+			assertThat(payload.startsWith("MESSAGE\n")).isTrue();
+			assertThat(payload.contains("destination:/topic/scopedBeanValue\n")).isTrue();
+			assertThat(payload.endsWith("55\0")).isTrue();
 		}
 	}
 
 
-	@Target({ElementType.TYPE})
 	@Retention(RetentionPolicy.RUNTIME)
 	@Controller
 	private @interface IntegrationTestController {
 	}
+
 
 	@IntegrationTestController
 	static class SimpleController {
 
 		private CountDownLatch latch = new CountDownLatch(1);
 
-		@MessageMapping(value="/simple")
+		@MessageMapping("/simple")
 		public void handle() {
 			this.latch.countDown();
 		}
 
-		@MessageMapping(value="/exception")
+		@MessageMapping("/exception")
 		public void handleWithError() {
 			throw new IllegalArgumentException("Bad input");
 		}
@@ -237,10 +212,11 @@ public class StompWebSocketIntegrationTests extends AbstractWebSocketIntegration
 		}
 	}
 
+
 	@IntegrationTestController
 	static class IncrementController {
 
-		@MessageMapping(value="/increment")
+		@MessageMapping("/increment")
 		public int handle(int i) {
 			return i + 1;
 		}
@@ -250,6 +226,7 @@ public class StompWebSocketIntegrationTests extends AbstractWebSocketIntegration
 			return 42;
 		}
 	}
+
 
 	@IntegrationTestController
 	static class ScopedBeanController {
@@ -261,17 +238,18 @@ public class StompWebSocketIntegrationTests extends AbstractWebSocketIntegration
 			this.scopedBean = scopedBean;
 		}
 
-		@MessageMapping(value="/scopedBeanValue")
+		@MessageMapping("/scopedBeanValue")
 		public String getValue() {
 			return this.scopedBean.getValue();
 		}
 	}
 
 
-	static interface ScopedBean {
+	interface ScopedBean {
 
 		String getValue();
 	}
+
 
 	static class ScopedBeanImpl implements ScopedBean {
 
@@ -298,7 +276,6 @@ public class StompWebSocketIntegrationTests extends AbstractWebSocketIntegration
 
 		private final CountDownLatch latch;
 
-
 		public TestClientWebSocketHandler(int expectedNumberOfMessages, TextMessage... messagesToSend) {
 			this.messagesToSend = messagesToSend;
 			this.expected = expectedNumberOfMessages;
@@ -319,15 +296,16 @@ public class StompWebSocketIntegrationTests extends AbstractWebSocketIntegration
 		}
 	}
 
+
 	@Configuration
 	@ComponentScan(
-			basePackageClasses=StompWebSocketIntegrationTests.class,
-			useDefaultFilters=false,
-			includeFilters=@ComponentScan.Filter(IntegrationTestController.class))
-	static class TestMessageBrokerConfigurer extends AbstractWebSocketMessageBrokerConfigurer {
+			basePackageClasses = StompWebSocketIntegrationTests.class,
+			useDefaultFilters = false,
+			includeFilters = @ComponentScan.Filter(IntegrationTestController.class))
+	static class TestMessageBrokerConfigurer implements WebSocketMessageBrokerConfigurer {
 
 		@Autowired
-		private HandshakeHandler handshakeHandler; // can't rely on classpath for server detection
+		private HandshakeHandler handshakeHandler;  // can't rely on classpath for server detection
 
 		@Override
 		public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -341,11 +319,12 @@ public class StompWebSocketIntegrationTests extends AbstractWebSocketIntegration
 		}
 
 		@Bean
-		@Scope(value="websocket", proxyMode=ScopedProxyMode.INTERFACES)
+		@Scope(scopeName = "websocket", proxyMode = ScopedProxyMode.INTERFACES)
 		public ScopedBean scopedBean() {
 			return new ScopedBeanImpl("55");
 		}
 	}
+
 
 	@Configuration
 	static class TestMessageBrokerConfiguration extends DelegatingWebSocketMessageBrokerConfiguration {
@@ -353,13 +332,13 @@ public class StompWebSocketIntegrationTests extends AbstractWebSocketIntegration
 		@Override
 		@Bean
 		public AbstractSubscribableChannel clientInboundChannel() {
-			return new ExecutorSubscribableChannel(); // synchronous
+			return new ExecutorSubscribableChannel();  // synchronous
 		}
 
 		@Override
 		@Bean
 		public AbstractSubscribableChannel clientOutboundChannel() {
-			return new ExecutorSubscribableChannel(); // synchronous
+			return new ExecutorSubscribableChannel();  // synchronous
 		}
 	}
 

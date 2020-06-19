@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2012 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,29 +22,31 @@ import java.sql.SQLException;
 import java.util.Properties;
 
 import org.springframework.beans.BeanUtils;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 
 /**
  * Simple implementation of the standard JDBC {@link javax.sql.DataSource} interface,
- * configuring a plain old JDBC {@link java.sql.Driver} via bean properties, and returning
- * a new {@link java.sql.Connection} from every {@code getConnection} call.
+ * configuring a plain old JDBC {@link java.sql.Driver} via bean properties, and
+ * returning a new {@link java.sql.Connection} from every {@code getConnection} call.
  *
  * <p><b>NOTE: This class is not an actual connection pool; it does not actually
  * pool Connections.</b> It just serves as simple replacement for a full-blown
  * connection pool, implementing the same standard interface, but creating new
  * Connections on every call.
  *
- * <p>In a J2EE container, it is recommended to use a JNDI DataSource provided by
+ * <p>In a Java EE container, it is recommended to use a JNDI DataSource provided by
  * the container. Such a DataSource can be exposed as a DataSource bean in a Spring
  * ApplicationContext via {@link org.springframework.jndi.JndiObjectFactoryBean},
  * for seamless switching to and from a local DataSource bean like this class.
  *
- * <p>If you need a "real" connection pool outside of a J2EE container, consider
- * <a href="http://jakarta.apache.org/commons/dbcp">Apache's Jakarta Commons DBCP</a>
- * or <a href="http://sourceforge.net/projects/c3p0">C3P0</a>.
- * Commons DBCP's BasicDataSource and C3P0's ComboPooledDataSource are full
- * connection pool beans, supporting the same basic properties as this class
- * plus specific settings (such as minimal/maximal pool size etc).
+ * <p>This {@code SimpleDriverDataSource} class was originally designed alongside
+ * <a href="https://commons.apache.org/proper/commons-dbcp">Apache Commons DBCP</a>
+ * and <a href="https://sourceforge.net/projects/c3p0">C3P0</a>, featuring bean-style
+ * {@code BasicDataSource}/{@code ComboPooledDataSource} classes with configuration
+ * properties for local resource setups. For a modern JDBC connection pool, consider
+ * <a href="https://github.com/brettwooldridge/HikariCP">HikariCP</a> instead,
+ * exposing a corresponding {@code HikariDataSource} instance to the application.
  *
  * @author Juergen Hoeller
  * @since 2.5.5
@@ -52,6 +54,7 @@ import org.springframework.util.Assert;
  */
 public class SimpleDriverDataSource extends AbstractDriverBasedDataSource {
 
+	@Nullable
 	private Driver driver;
 
 
@@ -91,7 +94,7 @@ public class SimpleDriverDataSource extends AbstractDriverBasedDataSource {
 	 * Create a new DriverManagerDataSource with the given standard Driver parameters.
 	 * @param driver the JDBC Driver object
 	 * @param url the JDBC URL to use for accessing the DriverManager
-	 * @param conProps JDBC connection properties
+	 * @param conProps the JDBC connection properties
 	 * @see java.sql.Driver#connect(String, java.util.Properties)
 	 */
 	public SimpleDriverDataSource(Driver driver, String url, Properties conProps) {
@@ -117,13 +120,14 @@ public class SimpleDriverDataSource extends AbstractDriverBasedDataSource {
 	 * Driver instance.
 	 * @see #setDriverClass
 	 */
-	public void setDriver(Driver driver) {
+	public void setDriver(@Nullable Driver driver) {
 		this.driver = driver;
 	}
 
 	/**
 	 * Return the JDBC Driver instance to use.
 	 */
+	@Nullable
 	public Driver getDriver() {
 		return this.driver;
 	}

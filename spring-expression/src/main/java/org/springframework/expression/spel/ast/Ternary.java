@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,6 +24,8 @@ import org.springframework.expression.spel.CodeFlow;
 import org.springframework.expression.spel.ExpressionState;
 import org.springframework.expression.spel.SpelEvaluationException;
 import org.springframework.expression.spel.SpelMessage;
+import org.springframework.util.Assert;
+import org.springframework.util.ObjectUtils;
 
 /**
  * Represents a ternary expression, for example: "someCheck()?true:false".
@@ -34,17 +36,17 @@ import org.springframework.expression.spel.SpelMessage;
  */
 public class Ternary extends SpelNodeImpl {
 
-
-	public Ternary(int pos, SpelNodeImpl... args) {
-		super(pos,args);
+	public Ternary(int startPos, int endPos, SpelNodeImpl... args) {
+		super(startPos, endPos, args);
 	}
+
 
 	/**
 	 * Evaluate the condition and if true evaluate the first alternative, otherwise
 	 * evaluate the second alternative.
 	 * @param state the expression state
-	 * @throws EvaluationException if the condition does not evaluate correctly to a
-	 *         boolean or there is a problem executing the chosen alternative
+	 * @throws EvaluationException if the condition does not evaluate correctly to
+	 * a boolean or there is a problem executing the chosen alternative
 	 */
 	@Override
 	public TypedValue getValueInternal(ExpressionState state) throws EvaluationException {
@@ -53,34 +55,22 @@ public class Ternary extends SpelNodeImpl {
 			throw new SpelEvaluationException(getChild(0).getStartPosition(),
 					SpelMessage.TYPE_CONVERSION_ERROR, "null", "boolean");
 		}
-		TypedValue result = null;
-		if (value.booleanValue()) {
-			result = this.children[1].getValueInternal(state);
-		}
-		else {
-			result = this.children[2].getValueInternal(state);
-		}
+		TypedValue result = this.children[value ? 1 : 2].getValueInternal(state);
 		computeExitTypeDescriptor();
 		return result;
 	}
-	
+
 	@Override
 	public String toStringAST() {
-		return new StringBuilder().append(getChild(0).toStringAST()).append(" ? ").append(getChild(1).toStringAST())
-				.append(" : ").append(getChild(2).toStringAST()).toString();
+		return getChild(0).toStringAST() + " ? " + getChild(1).toStringAST() + " : " + getChild(2).toStringAST();
 	}
 
 	private void computeExitTypeDescriptor() {
-		if (exitTypeDescriptor == null && this.children[1].getExitDescriptor()!=null && this.children[2].getExitDescriptor()!=null) {
+		if (this.exitTypeDescriptor == null && this.children[1].exitTypeDescriptor != null &&
+				this.children[2].exitTypeDescriptor != null) {
 			String leftDescriptor = this.children[1].exitTypeDescriptor;
 			String rightDescriptor = this.children[2].exitTypeDescriptor;
-			if (leftDescriptor.equals(rightDescriptor)) {
-				this.exitTypeDescriptor = leftDescriptor;
-			}
-			else if (leftDescriptor.equals("Ljava/lang/Object") && !CodeFlow.isPrimitive(rightDescriptor)) {
-				this.exitTypeDescriptor = rightDescriptor;
-			}
-			else if (rightDescriptor.equals("Ljava/lang/Object") && !CodeFlow.isPrimitive(leftDescriptor)) {
+			if (ObjectUtils.nullSafeEquals(leftDescriptor, rightDescriptor)) {
 				this.exitTypeDescriptor = leftDescriptor;
 			}
 			else {
@@ -95,43 +85,46 @@ public class Ternary extends SpelNodeImpl {
 		SpelNodeImpl condition = this.children[0];
 		SpelNodeImpl left = this.children[1];
 		SpelNodeImpl right = this.children[2];
-		if (!(condition.isCompilable() && left.isCompilable() && right.isCompilable())) {
-			return false;
-		}
-		return CodeFlow.isBooleanCompatible(condition.exitTypeDescriptor) &&
-				left.getExitDescriptor()!=null && 
-				right.getExitDescriptor()!=null;
+		return (condition.isCompilable() && left.isCompilable() && right.isCompilable() &&
+				CodeFlow.isBooleanCompatible(condition.exitTypeDescriptor) &&
+				left.exitTypeDescriptor != null && right.exitTypeDescriptor != null);
 	}
-	
+
 	@Override
-	public void generateCode(MethodVisitor mv, CodeFlow codeflow) {
+	public void generateCode(MethodVisitor mv, CodeFlow cf) {
 		// May reach here without it computed if all elements are literals
 		computeExitTypeDescriptor();
-		codeflow.enterCompilationScope();
-		this.children[0].generateCode(mv, codeflow);
-		if (!CodeFlow.isPrimitive(codeflow.lastDescriptor())) {
-			CodeFlow.insertUnboxInsns(mv, 'Z', codeflow.lastDescriptor());
+		cf.enterCompilationScope();
+		this.children[0].generateCode(mv, cf);
+		String lastDesc = cf.lastDescriptor();
+		Assert.state(lastDesc != null, "No last descriptor");
+		if (!CodeFlow.isPrimitive(lastDesc)) {
+			CodeFlow.insertUnboxInsns(mv, 'Z', lastDesc);
 		}
-		codeflow.exitCompilationScope();
+		cf.exitCompilationScope();
 		Label elseTarget = new Label();
 		Label endOfIf = new Label();
 		mv.visitJumpInsn(IFEQ, elseTarget);
-		codeflow.enterCompilationScope();
-		this.children[1].generateCode(mv, codeflow);
-		if (!CodeFlow.isPrimitive(getExitDescriptor())) {
-			CodeFlow.insertBoxIfNecessary(mv, codeflow.lastDescriptor().charAt(0));
+		cf.enterCompilationScope();
+		this.children[1].generateCode(mv, cf);
+		if (!CodeFlow.isPrimitive(this.exitTypeDescriptor)) {
+			lastDesc = cf.lastDescriptor();
+			Assert.state(lastDesc != null, "No last descriptor");
+			CodeFlow.insertBoxIfNecessary(mv, lastDesc.charAt(0));
 		}
-		codeflow.exitCompilationScope();
+		cf.exitCompilationScope();
 		mv.visitJumpInsn(GOTO, endOfIf);
 		mv.visitLabel(elseTarget);
-		codeflow.enterCompilationScope();
-		this.children[2].generateCode(mv, codeflow);
-		if (!CodeFlow.isPrimitive(getExitDescriptor())) {
-			CodeFlow.insertBoxIfNecessary(mv, codeflow.lastDescriptor().charAt(0));
+		cf.enterCompilationScope();
+		this.children[2].generateCode(mv, cf);
+		if (!CodeFlow.isPrimitive(this.exitTypeDescriptor)) {
+			lastDesc = cf.lastDescriptor();
+			Assert.state(lastDesc != null, "No last descriptor");
+			CodeFlow.insertBoxIfNecessary(mv, lastDesc.charAt(0));
 		}
-		codeflow.exitCompilationScope();
+		cf.exitCompilationScope();
 		mv.visitLabel(endOfIf);
-		codeflow.pushDescriptor(getExitDescriptor());
+		cf.pushDescriptor(this.exitTypeDescriptor);
 	}
 
 }

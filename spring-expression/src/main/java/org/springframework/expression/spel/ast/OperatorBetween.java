@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -36,9 +36,10 @@ import org.springframework.expression.spel.support.BooleanTypedValue;
  */
 public class OperatorBetween extends Operator {
 
-	public OperatorBetween(int pos, SpelNodeImpl... operands) {
-		super("between", pos, operands);
+	public OperatorBetween(int startPos, int endPos, SpelNodeImpl... operands) {
+		super("between", startPos, endPos, operands);
 	}
+
 
 	/**
 	 * Returns a boolean based on whether a value is in the range expressed. The first
@@ -56,13 +57,13 @@ public class OperatorBetween extends Operator {
 			throw new SpelEvaluationException(getRightOperand().getStartPosition(),
 					SpelMessage.BETWEEN_RIGHT_OPERAND_MUST_BE_TWO_ELEMENT_LIST);
 		}
-		List<?> l = (List<?>) right;
-		Object low = l.get(0);
-		Object high = l.get(1);
-		TypeComparator comparator = state.getTypeComparator();
+
+		List<?> list = (List<?>) right;
+		Object low = list.get(0);
+		Object high = list.get(1);
+		TypeComparator comp = state.getTypeComparator();
 		try {
-			return BooleanTypedValue.forValue((comparator.compare(left, low) >= 0 &&
-					comparator.compare(left, high) <= 0));
+			return BooleanTypedValue.forValue(comp.compare(left, low) >= 0 && comp.compare(left, high) <= 0);
 		}
 		catch (SpelEvaluationException ex) {
 			ex.setPosition(getStartPosition());

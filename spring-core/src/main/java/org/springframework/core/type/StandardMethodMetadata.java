@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,6 +21,10 @@ import java.lang.reflect.Modifier;
 import java.util.Map;
 
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.annotation.MergedAnnotations;
+import org.springframework.core.annotation.MergedAnnotations.SearchStrategy;
+import org.springframework.core.annotation.RepeatableContainers;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.MultiValueMap;
 
@@ -40,11 +44,15 @@ public class StandardMethodMetadata implements MethodMetadata {
 
 	private final boolean nestedAnnotationsAsMap;
 
+	private final MergedAnnotations mergedAnnotations;
+
 
 	/**
 	 * Create a new StandardMethodMetadata wrapper for the given Method.
 	 * @param introspectedMethod the Method to introspect
+	 * @deprecated since 5.2 in favor of obtaining instances via {@link AnnotationMetadata}
 	 */
+	@Deprecated
 	public StandardMethodMetadata(Method introspectedMethod) {
 		this(introspectedMethod, false);
 	}
@@ -59,11 +67,21 @@ public class StandardMethodMetadata implements MethodMetadata {
 	 * {@link org.springframework.core.annotation.AnnotationAttributes} for compatibility
 	 * with ASM-based {@link AnnotationMetadata} implementations
 	 * @since 3.1.1
+	 * @deprecated since 5.2 in favor of obtaining instances via {@link AnnotationMetadata}
 	 */
+	@Deprecated
 	public StandardMethodMetadata(Method introspectedMethod, boolean nestedAnnotationsAsMap) {
 		Assert.notNull(introspectedMethod, "Method must not be null");
 		this.introspectedMethod = introspectedMethod;
 		this.nestedAnnotationsAsMap = nestedAnnotationsAsMap;
+		this.mergedAnnotations = MergedAnnotations.from(
+				introspectedMethod, SearchStrategy.DIRECT, RepeatableContainers.none());
+	}
+
+
+	@Override
+	public MergedAnnotations getAnnotations() {
+		return this.mergedAnnotations;
 	}
 
 	/**
@@ -73,7 +91,6 @@ public class StandardMethodMetadata implements MethodMetadata {
 		return this.introspectedMethod;
 	}
 
-
 	@Override
 	public String getMethodName() {
 		return this.introspectedMethod.getName();
@@ -82,6 +99,16 @@ public class StandardMethodMetadata implements MethodMetadata {
 	@Override
 	public String getDeclaringClassName() {
 		return this.introspectedMethod.getDeclaringClass().getName();
+	}
+
+	@Override
+	public String getReturnTypeName() {
+		return this.introspectedMethod.getReturnType().getName();
+	}
+
+	@Override
+	public boolean isAbstract() {
+		return Modifier.isAbstract(this.introspectedMethod.getModifiers());
 	}
 
 	@Override
@@ -96,34 +123,31 @@ public class StandardMethodMetadata implements MethodMetadata {
 
 	@Override
 	public boolean isOverridable() {
-		return (!isStatic() && !isFinal() && !Modifier.isPrivate(this.introspectedMethod.getModifiers()));
+		return !isStatic() && !isFinal() && !isPrivate();
+	}
+
+	private boolean isPrivate() {
+		return Modifier.isPrivate(this.introspectedMethod.getModifiers());
 	}
 
 	@Override
-	public boolean isAnnotated(String annotationType) {
-		return AnnotatedElementUtils.isAnnotated(this.introspectedMethod, annotationType);
+	@Nullable
+	public Map<String, Object> getAnnotationAttributes(String annotationName, boolean classValuesAsString) {
+		if (this.nestedAnnotationsAsMap) {
+			return MethodMetadata.super.getAnnotationAttributes(annotationName, classValuesAsString);
+		}
+		return AnnotatedElementUtils.getMergedAnnotationAttributes(this.introspectedMethod,
+				annotationName, classValuesAsString, false);
 	}
 
 	@Override
-	public Map<String, Object> getAnnotationAttributes(String annotationType) {
-		return getAnnotationAttributes(annotationType, false);
-	}
-
-	@Override
-	public Map<String, Object> getAnnotationAttributes(String annotationType, boolean classValuesAsString) {
-		return AnnotatedElementUtils.getAnnotationAttributes(this.introspectedMethod,
-				annotationType, classValuesAsString, this.nestedAnnotationsAsMap);
-	}
-
-	@Override
-	public MultiValueMap<String, Object> getAllAnnotationAttributes(String annotationType) {
-		return getAllAnnotationAttributes(annotationType, false);
-	}
-
-	@Override
-	public MultiValueMap<String, Object> getAllAnnotationAttributes(String annotationType, boolean classValuesAsString) {
+	@Nullable
+	public MultiValueMap<String, Object> getAllAnnotationAttributes(String annotationName, boolean classValuesAsString) {
+		if (this.nestedAnnotationsAsMap) {
+			return MethodMetadata.super.getAllAnnotationAttributes(annotationName, classValuesAsString);
+		}
 		return AnnotatedElementUtils.getAllAnnotationAttributes(this.introspectedMethod,
-				annotationType, classValuesAsString, this.nestedAnnotationsAsMap);
+				annotationName, classValuesAsString, false);
 	}
 
 }

@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,7 +29,7 @@ import org.springframework.jms.config.JmsListenerEndpointRegistry;
  * a default {@link JmsListenerEndpointRegistry}.
  *
  * <p>This configuration class is automatically imported when using the @{@link EnableJms}
- * annotation.  See {@link EnableJms} Javadoc for complete usage.
+ * annotation. See the {@link EnableJms} javadocs for complete usage details.
  *
  * @author Stephane Nicoll
  * @since 4.1
@@ -37,7 +37,8 @@ import org.springframework.jms.config.JmsListenerEndpointRegistry;
  * @see JmsListenerEndpointRegistry
  * @see EnableJms
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
+@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 public class JmsBootstrapConfiguration {
 
 	@Bean(name = JmsListenerConfigUtils.JMS_LISTENER_ANNOTATION_PROCESSOR_BEAN_NAME)

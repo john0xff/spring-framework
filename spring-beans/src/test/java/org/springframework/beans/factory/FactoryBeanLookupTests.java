@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2012 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,17 +16,16 @@
 
 package org.springframework.beans.factory;
 
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import org.junit.Before;
-import org.junit.Test;
 import org.springframework.beans.factory.config.AbstractFactoryBean;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.beans.factory.xml.XmlBeanDefinitionReader;
 import org.springframework.core.io.ClassPathResource;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Written with the intention of reproducing SPR-7318.
@@ -36,7 +35,7 @@ import org.springframework.core.io.ClassPathResource;
 public class FactoryBeanLookupTests {
 	private BeanFactory beanFactory;
 
-	@Before
+	@BeforeEach
 	public void setUp() {
 		beanFactory = new DefaultListableBeanFactory();
 		new XmlBeanDefinitionReader((BeanDefinitionRegistry) beanFactory).loadBeanDefinitions(
@@ -46,31 +45,31 @@ public class FactoryBeanLookupTests {
 	@Test
 	public void factoryBeanLookupByNameDereferencing() {
 		Object fooFactory = beanFactory.getBean("&fooFactory");
-		assertThat(fooFactory, instanceOf(FooFactoryBean.class));
+		assertThat(fooFactory).isInstanceOf(FooFactoryBean.class);
 	}
 
 	@Test
 	public void factoryBeanLookupByType() {
 		FooFactoryBean fooFactory = beanFactory.getBean(FooFactoryBean.class);
-		assertNotNull(fooFactory);
+		assertThat(fooFactory).isNotNull();
 	}
 
 	@Test
 	public void factoryBeanLookupByTypeAndNameDereference() {
 		FooFactoryBean fooFactory = beanFactory.getBean("&fooFactory", FooFactoryBean.class);
-		assertNotNull(fooFactory);
+		assertThat(fooFactory).isNotNull();
 	}
 
 	@Test
 	public void factoryBeanObjectLookupByName() {
 		Object fooFactory = beanFactory.getBean("fooFactory");
-		assertThat(fooFactory, instanceOf(Foo.class));
+		assertThat(fooFactory).isInstanceOf(Foo.class);
 	}
 
 	@Test
 	public void factoryBeanObjectLookupByNameAndType() {
 		Foo foo = beanFactory.getBean("fooFactory", Foo.class);
-		assertNotNull(foo);
+		assertThat(foo).isNotNull();
 	}
 }
 

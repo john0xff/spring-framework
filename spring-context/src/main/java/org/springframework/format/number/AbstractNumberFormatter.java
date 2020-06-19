@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -35,6 +35,7 @@ public abstract class AbstractNumberFormatter implements Formatter<Number> {
 
 	private boolean lenient = false;
 
+
 	/**
 	 * Specify whether or not parsing is to be lenient. Default is false.
 	 * <p>With lenient parsing, the parser may allow inputs that do not precisely match the format.
@@ -43,6 +44,7 @@ public abstract class AbstractNumberFormatter implements Formatter<Number> {
 	public void setLenient(boolean lenient) {
 		this.lenient = lenient;
 	}
+
 
 	@Override
 	public String print(Number number, Locale locale) {

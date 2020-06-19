@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,35 +16,39 @@
 
 package org.springframework.beans;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import org.springframework.tests.sample.beans.TestBean;
+import org.springframework.beans.testfixture.beans.TestBean;
 
-import static org.junit.Assert.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Unit tests for {@link DirectFieldAccessor}
+ * Specific {@link DirectFieldAccessor} tests.
  *
  * @author Jose Luis Martin
  * @author Chris Beams
+ * @author Stephane Nicoll
  */
-public class DirectFieldAccessorTests extends AbstractConfigurablePropertyAccessorTests {
+public class DirectFieldAccessorTests extends AbstractPropertyAccessorTests {
 
 	@Override
-	protected ConfigurablePropertyAccessor createAccessor(Object target) {
+	protected DirectFieldAccessor createAccessor(Object target) {
 		return new DirectFieldAccessor(target);
 	}
 
+
 	@Test
-	public void withShadowedField() throws Exception {
-		@SuppressWarnings("serial")
-		TestBean tb = new TestBean() {
+	public void withShadowedField() {
+		final StringBuilder sb = new StringBuilder();
+
+		TestBean target = new TestBean() {
 			@SuppressWarnings("unused")
-			StringBuilder name = new StringBuilder();
+			StringBuilder name = sb;
 		};
 
-		DirectFieldAccessor dfa = new DirectFieldAccessor(tb);
-		assertEquals(StringBuilder.class, dfa.getPropertyType("name"));
+		DirectFieldAccessor dfa = createAccessor(target);
+		assertThat(dfa.getPropertyType("name")).isEqualTo(StringBuilder.class);
+		assertThat(dfa.getPropertyValue("name")).isEqualTo(sb);
 	}
 
 }

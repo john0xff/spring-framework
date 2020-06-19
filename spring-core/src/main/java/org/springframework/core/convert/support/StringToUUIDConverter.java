@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2012 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,19 +22,17 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.util.StringUtils;
 
 /**
- * Converts from a String to a java.util.UUID by calling {@link UUID#fromString(String)}.
+ * Converts from a String to a {@link java.util.UUID}.
  *
  * @author Phillip Webb
  * @since 3.2
+ * @see UUID#fromString
  */
 final class StringToUUIDConverter implements Converter<String, UUID> {
 
 	@Override
 	public UUID convert(String source) {
-		if (StringUtils.hasLength(source)) {
-			return UUID.fromString(source.trim());
-		}
-		return null;
+		return (StringUtils.hasText(source) ? UUID.fromString(source.trim()) : null);
 	}
 
 }

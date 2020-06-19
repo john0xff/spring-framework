@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,6 +27,7 @@ import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.beans.factory.xml.BeanDefinitionParser;
 import org.springframework.beans.factory.xml.ParserContext;
+import org.springframework.lang.Nullable;
 import org.springframework.util.StringUtils;
 
 /**
@@ -46,6 +47,7 @@ public class AnnotationDrivenBeanDefinitionParser implements BeanDefinitionParse
 
 
 	@Override
+	@Nullable
 	public BeanDefinition parse(Element element, ParserContext parserContext) {
 		Object source = parserContext.extractSource(element);
 
@@ -79,7 +81,7 @@ public class AnnotationDrivenBeanDefinitionParser implements BeanDefinitionParse
 				if (StringUtils.hasText(exceptionHandler)) {
 					builder.addPropertyReference("exceptionHandler", exceptionHandler);
 				}
-				if (Boolean.valueOf(element.getAttribute(AopNamespaceUtils.PROXY_TARGET_CLASS_ATTRIBUTE))) {
+				if (Boolean.parseBoolean(element.getAttribute(AopNamespaceUtils.PROXY_TARGET_CLASS_ATTRIBUTE))) {
 					builder.addPropertyValue("proxyTargetClass", true);
 				}
 				registerPostProcessor(parserContext, builder, TaskManagementConfigUtils.ASYNC_ANNOTATION_PROCESSOR_BEAN_NAME);
@@ -114,6 +116,10 @@ public class AnnotationDrivenBeanDefinitionParser implements BeanDefinitionParse
 			String executor = element.getAttribute("executor");
 			if (StringUtils.hasText(executor)) {
 				builder.addPropertyReference("executor", executor);
+			}
+			String exceptionHandler = element.getAttribute("exception-handler");
+			if (StringUtils.hasText(exceptionHandler)) {
+				builder.addPropertyReference("exceptionHandler", exceptionHandler);
 			}
 			parserContext.registerBeanComponent(new BeanComponentDefinition(builder.getBeanDefinition(),
 					TaskManagementConfigUtils.ASYNC_EXECUTION_ASPECT_BEAN_NAME));

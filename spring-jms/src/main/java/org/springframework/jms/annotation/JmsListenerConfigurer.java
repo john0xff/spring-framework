@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2016 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,10 +19,10 @@ package org.springframework.jms.annotation;
 import org.springframework.jms.config.JmsListenerEndpointRegistrar;
 
 /**
- * Optional interface to be implemented by Spring managed bean willing
+ * Optional interface to be implemented by a Spring managed bean willing
  * to customize how JMS listener endpoints are configured. Typically
- * used to defined the default {@link org.springframework.jms.config.JmsListenerContainerFactory
- * JmsListenerContainerFactory} to use or for registering jms endpoints
+ * used to define the default {@link org.springframework.jms.config.JmsListenerContainerFactory
+ * JmsListenerContainerFactory} to use or for registering JMS endpoints
  * in a <em>programmatic</em> fashion as opposed to the <em>declarative</em>
  * approach of using the @{@link JmsListener} annotation.
  *
@@ -33,6 +33,7 @@ import org.springframework.jms.config.JmsListenerEndpointRegistrar;
  * @see EnableJms
  * @see JmsListenerEndpointRegistrar
  */
+@FunctionalInterface
 public interface JmsListenerConfigurer {
 
 	/**

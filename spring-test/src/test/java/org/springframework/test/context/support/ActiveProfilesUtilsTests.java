@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,16 +20,21 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import org.springframework.core.annotation.AnnotationConfigurationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.ActiveProfilesResolver;
+import org.springframework.util.StringUtils;
 
-import static org.junit.Assert.*;
-import static org.springframework.test.context.support.ActiveProfilesUtils.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.springframework.test.context.support.ActiveProfilesUtils.resolveActiveProfiles;
 
 /**
  * Unit tests for {@link ActiveProfilesUtils} involving resolution of active bean
@@ -39,59 +44,59 @@ import static org.springframework.test.context.support.ActiveProfilesUtils.*;
  * @author Michail Nikolaev
  * @since 3.1
  */
-public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsTests {
+class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsTests {
 
 	private void assertResolvedProfiles(Class<?> testClass, String... expected) {
-		assertNotNull(testClass);
-		assertNotNull(expected);
-		String[] actual = resolveActiveProfiles(testClass);
-		Set<String> expectedSet = new HashSet<String>(Arrays.asList(expected));
-		Set<String> actualSet = new HashSet<String>(Arrays.asList(actual));
-		assertEquals(expectedSet, actualSet);
+		assertThat(resolveActiveProfiles(testClass)).isEqualTo(expected);
 	}
 
 	@Test
-	public void resolveActiveProfilesWithoutAnnotation() {
-		assertArrayEquals(EMPTY_STRING_ARRAY, resolveActiveProfiles(Enigma.class));
+	void resolveActiveProfilesWithoutAnnotation() {
+		assertResolvedProfiles(Enigma.class, EMPTY_STRING_ARRAY);
 	}
 
 	@Test
-	public void resolveActiveProfilesWithNoProfilesDeclared() {
-		assertArrayEquals(EMPTY_STRING_ARRAY, resolveActiveProfiles(BareAnnotations.class));
+	void resolveActiveProfilesWithNoProfilesDeclared() {
+		assertResolvedProfiles(BareAnnotations.class, EMPTY_STRING_ARRAY);
 	}
 
 	@Test
-	public void resolveActiveProfilesWithEmptyProfiles() {
-		assertArrayEquals(EMPTY_STRING_ARRAY, resolveActiveProfiles(EmptyProfiles.class));
+	void resolveActiveProfilesWithEmptyProfiles() {
+		assertResolvedProfiles(EmptyProfiles.class, EMPTY_STRING_ARRAY);
 	}
 
 	@Test
-	public void resolveActiveProfilesWithDuplicatedProfiles() {
+	void resolveActiveProfilesWithDuplicatedProfiles() {
 		assertResolvedProfiles(DuplicatedProfiles.class, "foo", "bar", "baz");
 	}
 
 	@Test
-	public void resolveActiveProfilesWithLocalAnnotation() {
+	void resolveActiveProfilesWithLocalAndInheritedDuplicatedProfiles() {
+		assertResolvedProfiles(ExtendedDuplicatedProfiles.class, "foo", "bar", "baz", "cat", "dog");
+	}
+
+	@Test
+	void resolveActiveProfilesWithLocalAnnotation() {
 		assertResolvedProfiles(LocationsFoo.class, "foo");
 	}
 
 	@Test
-	public void resolveActiveProfilesWithInheritedAnnotationAndLocations() {
+	void resolveActiveProfilesWithInheritedAnnotationAndLocations() {
 		assertResolvedProfiles(InheritedLocationsFoo.class, "foo");
 	}
 
 	@Test
-	public void resolveActiveProfilesWithInheritedAnnotationAndClasses() {
+	void resolveActiveProfilesWithInheritedAnnotationAndClasses() {
 		assertResolvedProfiles(InheritedClassesFoo.class, "foo");
 	}
 
 	@Test
-	public void resolveActiveProfilesWithLocalAndInheritedAnnotations() {
+	void resolveActiveProfilesWithLocalAndInheritedAnnotations() {
 		assertResolvedProfiles(LocationsBar.class, "foo", "bar");
 	}
 
 	@Test
-	public void resolveActiveProfilesWithOverriddenAnnotation() {
+	void resolveActiveProfilesWithOverriddenAnnotation() {
 		assertResolvedProfiles(Animals.class, "dog", "cat");
 	}
 
@@ -99,7 +104,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithMetaAnnotation() {
+	void resolveActiveProfilesWithMetaAnnotation() {
 		assertResolvedProfiles(MetaLocationsFoo.class, "foo");
 	}
 
@@ -107,7 +112,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithMetaAnnotationAndOverrides() {
+	void resolveActiveProfilesWithMetaAnnotationAndOverrides() {
 		assertResolvedProfiles(MetaLocationsFooWithOverrides.class, "foo");
 	}
 
@@ -115,7 +120,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithMetaAnnotationAndOverriddenAttributes() {
+	void resolveActiveProfilesWithMetaAnnotationAndOverriddenAttributes() {
 		assertResolvedProfiles(MetaLocationsFooWithOverriddenAttributes.class, "foo1", "foo2");
 	}
 
@@ -123,7 +128,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithLocalAndInheritedMetaAnnotations() {
+	void resolveActiveProfilesWithLocalAndInheritedMetaAnnotations() {
 		assertResolvedProfiles(MetaLocationsBar.class, "foo", "bar");
 	}
 
@@ -131,7 +136,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithOverriddenMetaAnnotation() {
+	void resolveActiveProfilesWithOverriddenMetaAnnotation() {
 		assertResolvedProfiles(MetaAnimals.class, "dog", "cat");
 	}
 
@@ -139,7 +144,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithResolver() {
+	void resolveActiveProfilesWithResolver() {
 		assertResolvedProfiles(FooActiveProfilesResolverTestCase.class, "foo");
 	}
 
@@ -147,7 +152,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithInheritedResolver() {
+	void resolveActiveProfilesWithInheritedResolver() {
 		assertResolvedProfiles(InheritedFooActiveProfilesResolverTestCase.class, "foo");
 	}
 
@@ -155,7 +160,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithMergedInheritedResolver() {
+	void resolveActiveProfilesWithMergedInheritedResolver() {
 		assertResolvedProfiles(MergedInheritedFooActiveProfilesResolverTestCase.class, "foo", "bar");
 	}
 
@@ -163,15 +168,15 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithOverridenInheritedResolver() {
-		assertResolvedProfiles(OverridenInheritedFooActiveProfilesResolverTestCase.class, "bar");
+	void resolveActiveProfilesWithOverridenInheritedResolver() {
+		assertResolvedProfiles(OverriddenInheritedFooActiveProfilesResolverTestCase.class, "bar");
 	}
 
 	/**
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithResolverAndProfiles() {
+	void resolveActiveProfilesWithResolverAndProfiles() {
 		assertResolvedProfiles(ResolverAndProfilesTestCase.class, "bar");
 	}
 
@@ -179,44 +184,62 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	 * @since 4.0
 	 */
 	@Test
-	public void resolveActiveProfilesWithResolverAndValue() {
+	void resolveActiveProfilesWithResolverAndValue() {
 		assertResolvedProfiles(ResolverAndValueTestCase.class, "bar");
 	}
 
 	/**
 	 * @since 4.0
 	 */
-	@Test(expected = IllegalStateException.class)
-	public void resolveActiveProfilesWithConflictingProfilesAndValue() {
-		resolveActiveProfiles(ConflictingProfilesAndValueTestCase.class);
+	@Test
+	void resolveActiveProfilesWithConflictingProfilesAndValue() {
+		assertThatExceptionOfType(AnnotationConfigurationException.class).isThrownBy(() ->
+				resolveActiveProfiles(ConflictingProfilesAndValueTestCase.class));
 	}
 
 	/**
 	 * @since 4.0
 	 */
-	@Test(expected = IllegalStateException.class)
-	public void resolveActiveProfilesWithResolverWithoutDefaultConstructor() {
-		resolveActiveProfiles(NoDefaultConstructorActiveProfilesResolverTestCase.class);
+	@Test
+	void resolveActiveProfilesWithResolverWithoutDefaultConstructor() {
+		assertThatIllegalStateException().isThrownBy(() ->
+				resolveActiveProfiles(NoDefaultConstructorActiveProfilesResolverTestCase.class));
 	}
 
 	/**
 	 * @since 4.0
 	 */
-	@Test(expected = IllegalStateException.class)
-	public void resolveActiveProfilesWithResolverThatReturnsNull() {
-		resolveActiveProfiles(NullActiveProfilesResolverTestCase.class);
+	void resolveActiveProfilesWithResolverThatReturnsNull() {
+		assertResolvedProfiles(NullActiveProfilesResolverTestCase.class);
 	}
 
 	/**
 	 * This test verifies that the actual test class, not the composed annotation,
 	 * is passed to the resolver.
-	 *
 	 * @since 4.0.3
 	 */
 	@Test
-	public void resolveActiveProfilesWithMetaAnnotationAndTestClassVerifyingResolver() {
+	void resolveActiveProfilesWithMetaAnnotationAndTestClassVerifyingResolver() {
 		Class<TestClassVerifyingActiveProfilesResolverTestCase> testClass = TestClassVerifyingActiveProfilesResolverTestCase.class;
 		assertResolvedProfiles(testClass, testClass.getSimpleName());
+	}
+
+	/**
+	 * This test verifies that {@link DefaultActiveProfilesResolver} can be declared explicitly.
+	 * @since 4.1.5
+	 */
+	@Test
+	void resolveActiveProfilesWithDefaultActiveProfilesResolver() {
+		assertResolvedProfiles(DefaultActiveProfilesResolverTestCase.class, "default");
+	}
+
+	/**
+	 * This test verifies that {@link DefaultActiveProfilesResolver} can be extended.
+	 * @since 4.1.5
+	 */
+	@Test
+	void resolveActiveProfilesWithExtendedDefaultActiveProfilesResolver() {
+		assertResolvedProfiles(ExtendedDefaultActiveProfilesResolverTestCase.class, "default", "foo");
 	}
 
 
@@ -228,6 +251,10 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 
 	@ActiveProfiles({ "foo", "bar", "  foo", "bar  ", "baz" })
 	private static class DuplicatedProfiles {
+	}
+
+	@ActiveProfiles({ "cat", "dog", "  foo", "bar  ", "cat" })
+	private static class ExtendedDuplicatedProfiles extends DuplicatedProfiles {
 	}
 
 	@ActiveProfiles(profiles = { "dog", "cat" }, inheritProfiles = false)
@@ -277,7 +304,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	}
 
 	@ActiveProfiles(resolver = BarActiveProfilesResolver.class, inheritProfiles = false)
-	private static class OverridenInheritedFooActiveProfilesResolverTestCase extends
+	private static class OverriddenInheritedFooActiveProfilesResolverTestCase extends
 			InheritedFooActiveProfilesResolverTestCase {
 	}
 
@@ -291,6 +318,14 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 
 	@MetaResolverConfig
 	private static class TestClassVerifyingActiveProfilesResolverTestCase {
+	}
+
+	@ActiveProfiles(profiles = "default", resolver = DefaultActiveProfilesResolver.class)
+	private static class DefaultActiveProfilesResolverTestCase {
+	}
+
+	@ActiveProfiles(profiles = "default", resolver = ExtendedDefaultActiveProfilesResolver.class)
+	private static class ExtendedDefaultActiveProfilesResolverTestCase {
 	}
 
 	@ActiveProfiles(profiles = "conflict 1", value = "conflict 2")
@@ -324,7 +359,7 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 	private static class NoDefaultConstructorActiveProfilesResolver implements ActiveProfilesResolver {
 
 		@SuppressWarnings("unused")
-		NoDefaultConstructorActiveProfilesResolver(Object agument) {
+		NoDefaultConstructorActiveProfilesResolver(Object argument) {
 		}
 
 		@Override
@@ -339,6 +374,16 @@ public class ActiveProfilesUtilsTests extends AbstractContextConfigurationUtilsT
 		public String[] resolve(Class<?> testClass) {
 			return testClass.isAnnotation() ? new String[] { "@" + testClass.getSimpleName() }
 					: new String[] { testClass.getSimpleName() };
+		}
+	}
+
+	private static class ExtendedDefaultActiveProfilesResolver extends DefaultActiveProfilesResolver {
+
+		@Override
+		public String[] resolve(Class<?> testClass) {
+			List<String> profiles = new ArrayList<>(Arrays.asList(super.resolve(testClass)));
+			profiles.add("foo");
+			return StringUtils.toStringArray(profiles);
 		}
 	}
 

@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2015 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@
 
 package org.springframework.messaging.handler;
 
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 
 /**
@@ -25,10 +26,9 @@ import org.springframework.messaging.Message;
  * matched to a specific Message, as well as compared to each other in the
  * context of a Message to determine which one matches a request more closely.
  *
- * @param <T> The kind of condition that this condition can be combined with or compared to
- *
  * @author Rossen Stoyanchev
  * @since 4.0
+ * @param <T> the kind of condition that this condition can be combined with or compared to
  */
 public interface MessageCondition<T> {
 
@@ -47,6 +47,7 @@ public interface MessageCondition<T> {
 	 * condition with sorted, matching patterns only.
 	 * @return a condition instance in case of a match; or {@code null} if there is no match.
 	 */
+	@Nullable
 	T getMatchingCondition(Message<?> message);
 
 	/**

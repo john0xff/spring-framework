@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,7 +16,12 @@
 
 package org.springframework.web.method.support;
 
-import org.junit.Test;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
 import org.springframework.core.MethodParameter;
 import org.springframework.util.ClassUtils;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -24,12 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.method.annotation.RequestHeaderMethodArgumentResolver;
 import org.springframework.web.method.annotation.RequestParamMethodArgumentResolver;
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for
@@ -43,7 +43,7 @@ public class CompositeUriComponentsContributorTests {
 	@Test
 	public void supportsParameter() {
 
-		List<HandlerMethodArgumentResolver> resolvers = new ArrayList<HandlerMethodArgumentResolver>();
+		List<HandlerMethodArgumentResolver> resolvers = new ArrayList<>();
 		resolvers.add(new RequestParamMethodArgumentResolver(false));
 		resolvers.add(new RequestHeaderMethodArgumentResolver(null));
 		resolvers.add(new RequestParamMethodArgumentResolver(true));
@@ -51,13 +51,12 @@ public class CompositeUriComponentsContributorTests {
 		Method method = ClassUtils.getMethod(this.getClass(), "handleRequest", String.class, String.class, String.class);
 
 		CompositeUriComponentsContributor contributor = new CompositeUriComponentsContributor(resolvers);
-		assertTrue(contributor.supportsParameter(new MethodParameter(method, 0)));
-		assertTrue(contributor.supportsParameter(new MethodParameter(method, 1)));
-		assertFalse(contributor.supportsParameter(new MethodParameter(method, 2)));
+		assertThat(contributor.supportsParameter(new MethodParameter(method, 0))).isTrue();
+		assertThat(contributor.supportsParameter(new MethodParameter(method, 1))).isTrue();
+		assertThat(contributor.supportsParameter(new MethodParameter(method, 2))).isFalse();
 	}
 
 
-	@SuppressWarnings("unused")
 	public void handleRequest(@RequestParam String p1, String p2, @RequestHeader String h) {
 	}
 

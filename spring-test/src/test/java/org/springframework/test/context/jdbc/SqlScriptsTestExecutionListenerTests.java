@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,16 +16,21 @@
 
 package org.springframework.test.context.jdbc;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.BDDMockito;
+
 import org.springframework.beans.factory.config.AutowireCapableBeanFactory;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.annotation.AnnotationConfigurationException;
 import org.springframework.core.io.Resource;
 import org.springframework.test.context.TestContext;
 import org.springframework.test.context.jdbc.SqlConfig.TransactionMode;
 
-import static org.junit.Assert.*;
-import static org.mockito.BDDMockito.*;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link SqlScriptsTestExecutionListener}.
@@ -33,7 +38,7 @@ import static org.mockito.BDDMockito.*;
  * @author Sam Brannen
  * @since 4.1
  */
-public class SqlScriptsTestExecutionListenerTests {
+class SqlScriptsTestExecutionListenerTests {
 
 	private final SqlScriptsTestExecutionListener listener = new SqlScriptsTestExecutionListener();
 
@@ -41,8 +46,8 @@ public class SqlScriptsTestExecutionListenerTests {
 
 
 	@Test
-	public void missingValueAndScriptsAtClassLevel() throws Exception {
-		Class<?> clazz = MissingValueAndScriptsAtClassLevel.class;
+	void missingValueAndScriptsAndStatementsAtClassLevel() throws Exception {
+		Class<?> clazz = MissingValueAndScriptsAndStatementsAtClassLevel.class;
 		BDDMockito.<Class<?>> given(testContext.getTestClass()).willReturn(clazz);
 		given(testContext.getTestMethod()).willReturn(clazz.getDeclaredMethod("foo"));
 
@@ -50,8 +55,8 @@ public class SqlScriptsTestExecutionListenerTests {
 	}
 
 	@Test
-	public void missingValueAndScriptsAtMethodLevel() throws Exception {
-		Class<?> clazz = MissingValueAndScriptsAtMethodLevel.class;
+	void missingValueAndScriptsAndStatementsAtMethodLevel() throws Exception {
+		Class<?> clazz = MissingValueAndScriptsAndStatementsAtMethodLevel.class;
 		BDDMockito.<Class<?>> given(testContext.getTestClass()).willReturn(clazz);
 		given(testContext.getTestMethod()).willReturn(clazz.getDeclaredMethod("foo"));
 
@@ -59,16 +64,20 @@ public class SqlScriptsTestExecutionListenerTests {
 	}
 
 	@Test
-	public void valueAndScriptsDeclared() throws Exception {
+	void valueAndScriptsDeclared() throws Exception {
 		Class<?> clazz = ValueAndScriptsDeclared.class;
 		BDDMockito.<Class<?>> given(testContext.getTestClass()).willReturn(clazz);
 		given(testContext.getTestMethod()).willReturn(clazz.getDeclaredMethod("foo"));
 
-		assertExceptionContains("Only one declaration of SQL script paths is permitted");
+		assertThatExceptionOfType(AnnotationConfigurationException.class).isThrownBy(() ->
+				listener.beforeTestMethod(testContext))
+			.withMessageContaining("Different @AliasFor mirror values")
+			.withMessageContaining("attribute 'scripts' and its alias 'value'")
+			.withMessageContaining("values of [{bar}] and [{foo}]");
 	}
 
 	@Test
-	public void isolatedTxModeDeclaredWithoutTxMgr() throws Exception {
+	void isolatedTxModeDeclaredWithoutTxMgr() throws Exception {
 		ApplicationContext ctx = mock(ApplicationContext.class);
 		given(ctx.getResource(anyString())).willReturn(mock(Resource.class));
 		given(ctx.getAutowireCapableBeanFactory()).willReturn(mock(AutowireCapableBeanFactory.class));
@@ -82,7 +91,7 @@ public class SqlScriptsTestExecutionListenerTests {
 	}
 
 	@Test
-	public void missingDataSourceAndTxMgr() throws Exception {
+	void missingDataSourceAndTxMgr() throws Exception {
 		ApplicationContext ctx = mock(ApplicationContext.class);
 		given(ctx.getResource(anyString())).willReturn(mock(Resource.class));
 		given(ctx.getAutowireCapableBeanFactory()).willReturn(mock(AutowireCapableBeanFactory.class));
@@ -96,27 +105,22 @@ public class SqlScriptsTestExecutionListenerTests {
 	}
 
 	private void assertExceptionContains(String msg) throws Exception {
-		try {
-			listener.beforeTestMethod(testContext);
-			fail("Should have thrown an IllegalStateException.");
-		}
-		catch (IllegalStateException e) {
-			// System.err.println(e.getMessage());
-			assertTrue("Exception message should contain: " + msg, e.getMessage().contains(msg));
-		}
+		assertThatIllegalStateException().isThrownBy(() ->
+				listener.beforeTestMethod(testContext))
+			.withMessageContaining(msg);
 	}
 
 
 	// -------------------------------------------------------------------------
 
 	@Sql
-	static class MissingValueAndScriptsAtClassLevel {
+	static class MissingValueAndScriptsAndStatementsAtClassLevel {
 
 		public void foo() {
 		}
 	}
 
-	static class MissingValueAndScriptsAtMethodLevel {
+	static class MissingValueAndScriptsAndStatementsAtMethodLevel {
 
 		@Sql
 		public void foo() {

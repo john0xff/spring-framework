@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2013 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +19,6 @@ package org.springframework.expression.spel.ast;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -28,6 +27,7 @@ import org.springframework.expression.TypedValue;
 import org.springframework.expression.spel.ExpressionState;
 import org.springframework.expression.spel.SpelEvaluationException;
 import org.springframework.expression.spel.SpelMessage;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.ObjectUtils;
 
@@ -38,14 +38,16 @@ import org.springframework.util.ObjectUtils;
  *
  * @author Andy Clement
  * @author Mark Fisher
+ * @author Juergen Hoeller
  * @since 3.0
  */
 public class Projection extends SpelNodeImpl {
 
 	private final boolean nullSafe;
 
-	public Projection(boolean nullSafe, int pos, SpelNodeImpl expression) {
-		super(pos, expression);
+
+	public Projection(boolean nullSafe, int startPos, int endPos, SpelNodeImpl expression) {
+		super(startPos, endPos, expression);
 		this.nullSafe = nullSafe;
 	}
 
@@ -67,32 +69,34 @@ public class Projection extends SpelNodeImpl {
 		// before calling the specified operation. This special context object
 		// has two fields 'key' and 'value' that refer to the map entries key
 		// and value, and they can be referenced in the operation
-		// eg. {'a':'y','b':'n'}.!{value=='y'?key:null}" == ['a', null]
+		// eg. {'a':'y','b':'n'}.![value=='y'?key:null]" == ['a', null]
 		if (operand instanceof Map) {
 			Map<?, ?> mapData = (Map<?, ?>) operand;
-			List<Object> result = new ArrayList<Object>();
+			List<Object> result = new ArrayList<>();
 			for (Map.Entry<?, ?> entry : mapData.entrySet()) {
 				try {
 					state.pushActiveContextObject(new TypedValue(entry));
+					state.enterScope();
 					result.add(this.children[0].getValueInternal(state).getValue());
 				}
 				finally {
 					state.popActiveContextObject();
+					state.exitScope();
 				}
 			}
-			return new ValueRef.TypedValueHolderValueRef(new TypedValue(result),this); // TODO unable to build correct type descriptor
+			return new ValueRef.TypedValueHolderValueRef(new TypedValue(result), this);  // TODO unable to build correct type descriptor
 		}
 
-		if (operand instanceof Collection || operandIsArray) {
-			Collection<?> data = (operand instanceof Collection ? (Collection<?>) operand :
-					Arrays.asList(ObjectUtils.toObjectArray(operand)));
-			List<Object> result = new ArrayList<Object>();
-			int idx = 0;
+		if (operand instanceof Iterable || operandIsArray) {
+			Iterable<?> data = (operand instanceof Iterable ?
+					(Iterable<?>) operand : Arrays.asList(ObjectUtils.toObjectArray(operand)));
+
+			List<Object> result = new ArrayList<>();
 			Class<?> arrayElementType = null;
 			for (Object element : data) {
 				try {
 					state.pushActiveContextObject(new TypedValue(element));
-					state.enterScope("index", idx);
+					state.enterScope("index", result.size());
 					Object value = this.children[0].getValueInternal(state).getValue();
 					if (value != null && operandIsArray) {
 						arrayElementType = determineCommonType(arrayElementType, value.getClass());
@@ -103,8 +107,8 @@ public class Projection extends SpelNodeImpl {
 					state.exitScope();
 					state.popActiveContextObject();
 				}
-				idx++;
 			}
+
 			if (operandIsArray) {
 				if (arrayElementType == null) {
 					arrayElementType = Object.class;
@@ -113,28 +117,27 @@ public class Projection extends SpelNodeImpl {
 				System.arraycopy(result.toArray(), 0, resultArray, 0, result.size());
 				return new ValueRef.TypedValueHolderValueRef(new TypedValue(resultArray),this);
 			}
+
 			return new ValueRef.TypedValueHolderValueRef(new TypedValue(result),this);
 		}
 
-		if (operand==null) {
+		if (operand == null) {
 			if (this.nullSafe) {
-				return ValueRef.NullValueRef.instance;
+				return ValueRef.NullValueRef.INSTANCE;
 			}
-			throw new SpelEvaluationException(getStartPosition(),
-					SpelMessage.PROJECTION_NOT_SUPPORTED_ON_TYPE, "null");
+			throw new SpelEvaluationException(getStartPosition(), SpelMessage.PROJECTION_NOT_SUPPORTED_ON_TYPE, "null");
 		}
 
-		throw new SpelEvaluationException(getStartPosition(),
-				SpelMessage.PROJECTION_NOT_SUPPORTED_ON_TYPE, operand.getClass().getName());
+		throw new SpelEvaluationException(getStartPosition(), SpelMessage.PROJECTION_NOT_SUPPORTED_ON_TYPE,
+				operand.getClass().getName());
 	}
 
 	@Override
 	public String toStringAST() {
-		StringBuilder sb = new StringBuilder();
-		return sb.append("![").append(getChild(0).toStringAST()).append("]").toString();
+		return "![" + getChild(0).toStringAST() + "]";
 	}
 
-	private Class<?> determineCommonType(Class<?> oldType, Class<?> newType) {
+	private Class<?> determineCommonType(@Nullable Class<?> oldType, Class<?> newType) {
 		if (oldType == null) {
 			return newType;
 		}
@@ -148,8 +151,7 @@ public class Projection extends SpelNodeImpl {
 			}
 			nextType = nextType.getSuperclass();
 		}
-		Class<?>[] interfaces = ClassUtils.getAllInterfacesForClass(newType);
-		for (Class<?> nextInterface : interfaces) {
+		for (Class<?> nextInterface : ClassUtils.getAllInterfacesForClassAsSet(newType)) {
 			if (nextInterface.isAssignableFrom(oldType)) {
 				return nextInterface;
 			}

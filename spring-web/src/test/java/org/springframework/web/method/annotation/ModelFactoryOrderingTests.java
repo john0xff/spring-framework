@@ -1,11 +1,11 @@
 /*
- * Copyright 2002-2014 the original author or authors.
+ * Copyright 2002-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,13 +16,20 @@
 
 package org.springframework.web.method.annotation;
 
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import org.springframework.core.MethodIntrospector;
 import org.springframework.core.annotation.AnnotationUtils;
-import org.springframework.mock.web.test.MockHttpServletRequest;
-import org.springframework.mock.web.test.MockHttpServletResponse;
 import org.springframework.ui.Model;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -34,19 +41,13 @@ import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.method.HandlerMethod;
-import org.springframework.web.method.HandlerMethodSelector;
 import org.springframework.web.method.support.HandlerMethodArgumentResolverComposite;
 import org.springframework.web.method.support.InvocableHandlerMethod;
 import org.springframework.web.method.support.ModelAndViewContainer;
+import org.springframework.web.testfixture.servlet.MockHttpServletRequest;
+import org.springframework.web.testfixture.servlet.MockHttpServletResponse;
 
-import java.io.IOException;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-
-import static org.junit.Assert.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests verifying {@code @ModelAttribute} method inter-dependencies.
@@ -64,7 +65,7 @@ public class ModelFactoryOrderingTests {
 	private SessionAttributeStore sessionAttributeStore;
 
 
-	@Before
+	@BeforeEach
 	public void setup() {
 		this.sessionAttributeStore = new DefaultSessionAttributeStore();
 		this.webRequest = new ServletWebRequest(new MockHttpServletRequest(), new MockHttpServletResponse());
@@ -118,8 +119,8 @@ public class ModelFactoryOrderingTests {
 		WebDataBinderFactory dataBinderFactory = new DefaultDataBinderFactory(null);
 
 		Class<?> type = controller.getClass();
-		Set<Method> methods = HandlerMethodSelector.selectMethods(type, METHOD_FILTER);
-		List<InvocableHandlerMethod> modelMethods = new ArrayList<InvocableHandlerMethod>();
+		Set<Method> methods = MethodIntrospector.selectMethods(type, METHOD_FILTER);
+		List<InvocableHandlerMethod> modelMethods = new ArrayList<>();
 		for (Method method : methods) {
 			InvocableHandlerMethod modelMethod = new InvocableHandlerMethod(controller, method);
 			modelMethod.setHandlerMethodArgumentResolvers(resolvers);
@@ -143,8 +144,8 @@ public class ModelFactoryOrderingTests {
 	private void assertInvokedBefore(String beforeMethod, String... afterMethods) {
 		List<String> actual = getInvokedMethods();
 		for (String afterMethod : afterMethods) {
-			assertTrue(beforeMethod + " should be before " + afterMethod + ". Actual order: " +
-					actual.toString(), actual.indexOf(beforeMethod) < actual.indexOf(afterMethod));
+			assertThat(actual.indexOf(beforeMethod) < actual.indexOf(afterMethod)).as(beforeMethod + " should be before " + afterMethod + ". Actual order: " +
+						actual.toString()).isTrue();
 		}
 	}
 
@@ -167,7 +168,6 @@ public class ModelFactoryOrderingTests {
 		}
 	}
 
-	@SuppressWarnings("unused")
 	private static class StraightLineDependencyController extends AbstractController {
 
 		@ModelAttribute
@@ -207,7 +207,6 @@ public class ModelFactoryOrderingTests {
 		}
 	}
 
-	@SuppressWarnings("unused")
 	private static class TreeDependencyController extends AbstractController {
 
 		@ModelAttribute
@@ -246,7 +245,6 @@ public class ModelFactoryOrderingTests {
 		}
 	}
 
-	@SuppressWarnings("unused")
 	private static class InvertedTreeDependencyController extends AbstractController {
 
 		@ModelAttribute
@@ -286,7 +284,6 @@ public class ModelFactoryOrderingTests {
 
 	}
 
-	@SuppressWarnings("unused")
 	private static class UnresolvedDependencyController extends AbstractController {
 
 		@ModelAttribute
